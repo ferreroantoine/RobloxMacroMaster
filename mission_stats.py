@@ -68,29 +68,52 @@ def _same_size_score(a, b):
 
 DIGITS = "0123456789"
 _DIGIT_FILE = re.compile(r"^(\d)(?:_(\d+))?\.png$")
+_NUMBER_FILE = re.compile(r"^(\d+)_(\d+)\.png$")
+_NUMBER_FORMAT = re.compile(r"^(0|[1-9]\d{0,2}(,\d{3})*)$")  # format du jeu : 166,807
+NUMBER_MEMORY_THRESHOLD = 0.97  # 193 et 195 se ressemblent deja a 0.92 : il faut etre tres strict
+NUMBER_MEMORY_MARGIN = 0.03
+
+
+def _tight(mask):
+    """Masque recadre sur ses pixels allumes (None si vide)."""
+    ys, xs = np.nonzero(mask)
+    if len(ys) == 0:
+        return None
+    return mask[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
 
 
 class DigitReader:
-    """Lit un entier ecrit en clair (blanc / gris) avec des modeles de chiffres appris dans le jeu."""
+    """Lit un entier ecrit en clair (blanc / gris) avec des modeles de chiffres appris dans le jeu.
 
-    def __init__(self, digits_dir, threshold=0.70, min_value=170, max_saturation=80):
+    Trois facons de lire, de la plus sure a la plus souple :
+    1. memoire des nombres entiers deja valides (digits_dir/nombres/) ;
+    2. une tache par chiffre (cas courant) ;
+    3. decoupage libre de la bande de texte, pour les chiffres / virgules qui se touchent.
+    """
+
+    def __init__(self, digits_dir, threshold=0.70, min_white=120):
         self.dir = digits_dir
-        self.threshold, self.min_value, self.max_saturation = threshold, min_value, max_saturation
+        self.numbers_dir = os.path.join(digits_dir, "nombres")
+        self.threshold, self.min_white = threshold, min_white
         self.templates = []  # [(chiffre, masque)]
+        self.numbers = []    # [(valeur, bande de texte)]
+        self._cache = {}
         self.reload()
 
     def reload(self):
-        self.templates = []
-        if not os.path.isdir(self.dir):
-            return
-        for name in sorted(os.listdir(self.dir)):
-            m = _DIGIT_FILE.match(name)
-            if m:
-                try:
-                    img = load_template(os.path.join(self.dir, name))
-                except (OSError, ValueError):
-                    continue
-                self.templates.append((m.group(1), cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)))
+        self.templates, self.numbers, self._cache = [], [], {}
+        for folder, pattern, target, conv in ((self.dir, _DIGIT_FILE, self.templates, str),
+                                              (self.numbers_dir, _NUMBER_FILE, self.numbers, int)):
+            if not os.path.isdir(folder):
+                continue
+            for name in sorted(os.listdir(folder)):
+                m = pattern.match(name)
+                if m:
+                    try:
+                        img = load_template(os.path.join(folder, name))
+                    except (OSError, ValueError):
+                        continue
+                    target.append((conv(m.group(1)), cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)))
 
     def missing(self):
         have = {d for d, _ in self.templates}
@@ -98,8 +121,9 @@ class DigitReader:
 
     def segment(self, roi_bgr):
         """Masques des caracteres, de gauche a droite ; virgules et points (petites taches) retires."""
-        hsv = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2HSV)
-        mask = ((hsv[:, :, 2] >= self.min_value) & (hsv[:, :, 1] <= self.max_saturation)).astype(np.uint8) * 255
+        # Texte blanc / gris : les 3 canaux sont clairs (un fond colore a toujours un canal sombre).
+        # Seuil assez bas pour garder les bords adoucis des traits de 1 px, sinon un "9" se coupe en deux.
+        mask = (roi_bgr.min(axis=2) >= self.min_white).astype(np.uint8) * 255
         n, labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
         comps = [i for i in range(1, n) if stats[i, cv2.CC_STAT_AREA] >= 3]
         if not comps:
@@ -131,10 +155,42 @@ class DigitReader:
                 best_d, best = d, s
         return best_d, best
 
-    def read(self, roi_bgr):
-        """L'entier lu, ou None si illisible."""
-        if self.missing():
-            return None  # calibrage incomplet : un chiffre inconnu serait pris pour un autre
+    def strip(self, roi_bgr):
+        """(bande de texte recadree, hauteur d'un chiffre), ou (None, 0). Les restes d'icone hors de
+        la ligne de texte sont ignores ; les virgules restent dans la bande."""
+        mask = (roi_bgr.min(axis=2) >= self.min_white).astype(np.uint8) * 255
+        n, labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
+        comps = [i for i in range(1, n) if stats[i, cv2.CC_STAT_AREA] >= 3]
+        if not comps:
+            return None, 0
+        max_h = max(stats[i, cv2.CC_STAT_HEIGHT] for i in comps)
+        tall = [i for i in comps if stats[i, cv2.CC_STAT_HEIGHT] >= 0.5 * max_h]
+        top = min(stats[i, cv2.CC_STAT_TOP] for i in tall)
+        bottom = max(stats[i, cv2.CC_STAT_TOP] + stats[i, cv2.CC_STAT_HEIGHT] for i in tall)
+        keep = [i for i in comps if stats[i, cv2.CC_STAT_TOP] < bottom
+                and stats[i, cv2.CC_STAT_TOP] + stats[i, cv2.CC_STAT_HEIGHT] > top]
+        heights = sorted(stats[i, cv2.CC_STAT_HEIGHT] for i in tall)
+        return (_tight(np.isin(labels, keep).astype(np.uint8) * 255), int(heights[len(heights) // 2]))
+
+    def _recall(self, strip):
+        """Nombre deja valide dont la bande est (quasi) identique, sinon None."""
+        scores = {}
+        h, w = strip.shape
+        for value, known in self.numbers:
+            kh, kw = known.shape
+            if abs(kh - h) > 1 or abs(kw - w) > 2:
+                continue
+            s = _same_size_score(cv2.resize(strip, (kw, kh), interpolation=cv2.INTER_AREA), known)
+            scores[value] = max(scores.get(value, 0.0), s)
+        ranked = sorted(scores.items(), key=lambda kv: -kv[1])
+        if not ranked or ranked[0][1] < NUMBER_MEMORY_THRESHOLD:
+            return None
+        if len(ranked) > 1 and ranked[0][1] - ranked[1][1] < NUMBER_MEMORY_MARGIN:
+            return None
+        return ranked[0][0]
+
+    def _read_glyphs(self, roi_bgr):
+        """Lecture une tache = un chiffre ; None si une tache ne ressemble a aucun chiffre."""
         glyphs = self.segment(roi_bgr)
         if not glyphs:
             return None
@@ -146,12 +202,153 @@ class DigitReader:
             out.append(d)
         return int("".join(out))
 
+    def _read_free(self, strip, height):
+        """Decoupage libre de la bande (programmation dynamique sur les colonnes) : chaque morceau
+        est un chiffre connu, une virgule ou du vide ; le resultat doit avoir le format du jeu."""
+        h, width = strip.shape
+        ink = (strip > 0).sum(axis=0)
+        max_w = max(3, int(round(1.5 * height)))
+        comma_w = max(2, int(round(0.5 * height)))
+        neg = -1e9
+        best = [(neg, None)] * (width + 1)
+        best[0] = (0.0, None)
+        for b in range(1, width + 1):
+            cand = (neg, None)
+            if ink[b - 1] == 0 and best[b - 1][0] > neg:  # colonne vide
+                cand = (best[b - 1][0], (b - 1, "", 1.0))
+            for a in range(max(0, b - max_w), b):
+                if best[a][0] <= neg:
+                    continue
+                piece = _tight(strip[:, a:b])
+                if piece is None:
+                    continue
+                ys = np.nonzero(strip[:, a:b].any(axis=1))[0]
+                if b - a <= comma_w and ys.min() >= h / 2:  # petite marque en bas : virgule
+                    total = best[a][0] + 0.8 * (b - a)
+                    if total > cand[0]:
+                        cand = (total, (a, ",", 1.0))
+                    continue
+                d, score = self._best(piece)
+                if d is None or score < self.threshold:
+                    continue
+                # un "1" (simple barre) doit etre isole, sinon le bord de n'importe quel chiffre en serait un
+                if d == "1" and ((a > 0 and ink[a - 1]) or (b < width and ink[b])):
+                    continue
+                total = best[a][0] + score * (b - a)
+                if total > cand[0]:
+                    cand = (total, (a, d, score))
+            best[b] = cand
+        if best[width][0] <= neg:
+            return None
+        chars, b = [], width
+        while b > 0:
+            a, c, _ = best[b][1]
+            chars.append(c)
+            b = a
+        text = "".join(reversed(chars))
+        if not _NUMBER_FORMAT.match(text):
+            return None
+        return int(text.replace(",", ""))
+
+    def read(self, roi_bgr):
+        """L'entier lu, ou None si illisible."""
+        strip, height = self.strip(roi_bgr)
+        if strip is None:
+            return None
+        key = (strip.shape, strip.tobytes())
+        if key in self._cache:  # la meme image revient a chaque scan de l'ecran de fin
+            return self._cache[key]
+        value = self._recall(strip)
+        if value is None and not self.missing():  # calibrage incomplet : un chiffre inconnu serait pris pour un autre
+            value = self._read_glyphs(roi_bgr)
+            if value is None:
+                value = self._read_free(strip, height)
+        if len(self._cache) > 256:
+            self._cache.clear()
+        self._cache[key] = value
+        return value
+
+    def _align(self, strip, height, text):
+        """Decoupe la bande en len(text) morceaux (texte connu, virgules comprises) en coupant la ou il y a
+        le moins d'encre. Renvoie les masques des chiffres, ou None."""
+        on = strip > 0
+        width, n = on.shape[1], len(text)
+        # Cout d'une coupe entre les colonnes b-1 et b : pixels relies a travers (diagonales comprises).
+        # Deux caracteres qui se touchent ne sont relies que par 1 ou 2 pixels ; traverser un chiffre coute plus.
+        ink = np.zeros(width + 1)
+        for b in range(1, width):
+            right = on[:, b].copy()
+            right[1:] |= on[:-1, b]
+            right[:-1] |= on[1:, b]
+            ink[b] = float((on[:, b - 1] & right).sum()) + 0.01 * on[:, b - 1].sum()
+        digit = (1, max(3, int(round(1.5 * height))))
+        bounds = {",": (1, max(2, int(round(0.6 * height))))}
+        expected = {",": 0.2 * height}  # largeur habituelle, pour departager des coupes de meme cout
+        has_ink = on.any(axis=0)
+        ink_before = np.concatenate([[0], np.cumsum(has_ink)])
+        inf = float("inf")
+        cost = np.full((n + 1, width + 1), inf)
+        back = np.zeros((n + 1, width + 1), int)
+        cost[0, 0] = 0.0
+        for k, c in enumerate(text):
+            lo, hi = bounds.get(c, digit)
+            for a in range(width + 1):
+                if cost[k, a] == inf:
+                    continue
+                for b in range(a + lo, min(width, a + hi) + 1):
+                    if ink_before[b] == ink_before[a]:
+                        continue  # chaque caractere contient de l'encre
+                    cut = ink[b] if b < width else 0.0
+                    total = cost[k, a] + cut + 0.25 * abs((b - a) - expected.get(c, 0.6 * height))
+                    if total < cost[k + 1, b]:
+                        cost[k + 1, b], back[k + 1, b] = total, a
+        if cost[n, width] == inf:
+            return None
+        cuts = [width]
+        for k in range(n, 0, -1):
+            cuts.append(back[k, cuts[-1]])
+        cuts.reverse()
+        # Une tache ne peut contenir plusieurs chiffres que si elle est assez large pour ca
+        # (sinon on decouperait un vrai chiffre en deux pour "trouver" un chiffre de trop).
+        n_comp, labels, stats, _ = cv2.connectedComponentsWithStats(strip, connectivity=8)
+        per_comp = {}
+        glyphs = []
+        for k, c in enumerate(text):
+            if c == ",":
+                continue
+            piece = _tight(strip[:, cuts[k]:cuts[k + 1]])
+            if piece is None:
+                return None
+            glyphs.append(piece)
+            cols = labels[:, cuts[k]:cuts[k + 1]]
+            ids, counts = np.unique(cols[cols > 0], return_counts=True)
+            if len(ids):
+                main = int(ids[counts.argmax()])
+                per_comp[main] = per_comp.get(main, 0) + 1
+        for comp, k in per_comp.items():
+            if k >= 2 and stats[comp, cv2.CC_STAT_WIDTH] < 0.6 * height * k:
+                return None
+        return glyphs
+
+    def _remember(self, strip, value):
+        if self._recall(strip) == value:
+            return
+        os.makedirs(self.numbers_dir, exist_ok=True)
+        n = 1 + sum(1 for v, _ in self.numbers if v == value)
+        save_image(os.path.join(self.numbers_dir, "%d_%d.png" % (value, n)), strip)
+        self.numbers.append((value, strip))
+
     def learn(self, roi_bgr, value):
-        """Apprend les chiffres de `value` ecrits dans la zone ; renvoie les chiffres ajoutes."""
+        """Apprend les chiffres de `value` ecrits dans la zone (et le nombre entier) ; renvoie les chiffres ajoutes."""
         text = str(int(value))
         glyphs = self.segment(roi_bgr)
-        if len(glyphs) != len(text):
-            raise ValueError("%d caracteres trouves pour %d chiffres" % (len(glyphs), len(text)))
+        strip, height = self.strip(roi_bgr)
+        if len(glyphs) != len(text):  # chiffres ou virgule colles : decoupage guide par le nombre connu
+            glyphs = self._align(strip, height, "{:,}".format(int(value))) if strip is not None else None
+            if glyphs is None or len(glyphs) != len(text):
+                raise ValueError("chiffres impossibles a separer pour %s" % text)
+        self._cache = {}
+        self._remember(strip, int(value))
         os.makedirs(self.dir, exist_ok=True)
         added = []
         for g, d in zip(glyphs, text):
@@ -249,7 +446,7 @@ class IconLibrary:
 TITLE_FILES = {"completed": "completed.png", "failed": "failed.png", "obtained": "obtained.png"}
 DEFAULT_LAYOUT = {
     "slot_w": None, "slot_h": None, "title_threshold": 0.90, "icon_threshold": 0.85, "digit_threshold": 0.70,
-    "text_min_value": 170, "text_max_saturation": 80,
+    "text_min_white": 120,
 }
 SLOT_TOLERANCE = 0.10
 SLOT_BORDER = 3       # pixels de cadre retires avant de decouper icone / nombre
@@ -294,8 +491,7 @@ class EndScreenReader:
                 pass
         self.icons.threshold = self.layout["icon_threshold"]
         self.digits.threshold = self.layout["digit_threshold"]
-        self.digits.min_value = self.layout["text_min_value"]
-        self.digits.max_saturation = self.layout["text_max_saturation"]
+        self.digits.min_white = self.layout["text_min_white"]
 
     def missing(self):
         out = []

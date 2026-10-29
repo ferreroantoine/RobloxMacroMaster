@@ -27,6 +27,7 @@ import json
 import math
 import os
 import queue
+import re
 import shutil
 import sys
 import threading
@@ -693,6 +694,19 @@ class ReadingSetupDialog(tk.Toplevel):
         ttk.Button(digits, text="Calibrer les chiffres...", command=gui.open_calibration).pack(anchor="w", pady=(8, 0))
         ttk.Button(digits, text="Ouvrir le dossier stats",
                    command=lambda: os.startfile(STATS_DIR)).pack(anchor="w", pady=(4, 0))
+        unread = ttk.LabelFrame(f, text="Nombres illisibles (tape la valeur affichee, puis Apprendre)", padding=6)
+        unread.pack(fill="x", pady=(0, 8))
+        self.unread_frame = ttk.Frame(unread)
+        self.unread_frame.pack(fill="x")
+        row = ttk.Frame(unread)
+        row.pack(fill="x", pady=(4, 0))
+        ttk.Button(row, text="Apprendre", command=self.learn_unread).pack(side="left")
+        ttk.Button(row, text="Tout effacer", command=self.clear_unread).pack(side="left", padx=4)
+        self.unread_label = ttk.Label(unread, foreground="gray", wraplength=gui.px(640), justify="left",
+                                      text="Les montants rates pendant la session en cours sont ajoutes au total "
+                                           "quand tu tapes leur valeur.")
+        self.unread_label.pack(anchor="w", pady=(4, 0))
+        self.unread_rows = []
         ttk.Button(f, text="Fermer", command=self.destroy).pack(anchor="e")
         self.refresh()
 
@@ -713,8 +727,90 @@ class ReadingSetupDialog(tk.Toplevel):
             self.gui.start_mission_watch()
         self.refresh()
 
+    UNREAD_MAX = 8
+    UNREAD_FILE = re.compile(r"^(\d{8}_\d{6})_(\d+)(?:_(.*))?\.png$")
+
+    def _unread_files(self):
+        folder = os.path.join(STATS_DIR, "illisibles")
+        try:
+            names = [n for n in os.listdir(folder) if self.UNREAD_FILE.match(n)]
+        except OSError:
+            return []
+        return [os.path.join(folder, n) for n in sorted(names, reverse=True)[:self.UNREAD_MAX]]
+
+    def refresh_unread(self):
+        for w in self.unread_frame.winfo_children():
+            w.destroy()
+        self.unread_rows = []
+        files = self._unread_files()
+        if not files:
+            ttk.Label(self.unread_frame, text="Aucun pour l'instant.").grid(row=0, column=0, sticky="w")
+            return
+        for n, path in enumerate(files):
+            try:
+                img = Image.open(path)
+                img = img.resize((img.width * 3, img.height * 3), Image.NEAREST)
+            except OSError:
+                continue
+            m = self.UNREAD_FILE.match(os.path.basename(path))
+            stamp, resource = m.group(1), m.group(3) or ""
+            box = ttk.Frame(self.unread_frame, padding=3)
+            box.grid(row=n // 4, column=n % 4, sticky="n")
+            photo = ImageTk.PhotoImage(img)
+            ttk.Label(box, image=photo).pack()
+            ttk.Label(box, text="%s  %s:%s" % (resource or "?", stamp[9:11], stamp[11:13]),
+                      foreground="gray").pack()
+            entry = ttk.Entry(box, width=10, justify="center")
+            entry.pack()
+            self.unread_rows.append((path, stamp, resource, entry, photo))
+
+    def learn_unread(self):
+        gui, lines = self.gui, []
+        for path, stamp, resource, entry, _ in self.unread_rows:
+            text = entry.get().replace(" ", "").replace(",", "").replace(".", "")
+            if not text:
+                continue
+            if not text.isdigit():
+                lines.append("'%s' n'est pas un nombre." % entry.get())
+                continue
+            value = int(text)
+            try:
+                gui.digits.learn(ms.load_template(path), value)
+            except (OSError, ValueError) as e:
+                lines.append("%s : non appris (%s)." % (ms.format_amount(value), e))
+                continue
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+            s = gui.session
+            when = time.mktime(time.strptime(stamp, "%Y%m%d_%H%M%S"))
+            if s is not None and resource and s.started_at is not None and when >= s.started_at - 1:
+                s.totals[resource] = s.totals.get(resource, 0) + value
+                gui.save_session()
+                lines.append("%s %s appris et ajoute a la session." % (resource, ms.format_amount(value)))
+            else:
+                lines.append("%s appris." % ms.format_amount(value))
+        if lines:
+            rm.log("[STATS] " + " ".join(lines))
+            self.unread_label.config(text="\n".join(lines))
+        self.refresh()
+        gui.refresh_session_views()
+
+    def clear_unread(self):
+        files = [os.path.join(STATS_DIR, "illisibles", n) for n in os.listdir(os.path.join(STATS_DIR, "illisibles"))] \
+            if os.path.isdir(os.path.join(STATS_DIR, "illisibles")) else []
+        if files and messagebox.askyesno("Nombres illisibles", "Effacer les %d images ?" % len(files), parent=self):
+            for p in files:
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
+            self.refresh_unread()
+
     def refresh(self):
         gui = self.gui
+        self.refresh_unread()
         self.tree.delete(*self.tree.get_children())
         for key, name, path in sorted(gui.icons.items(), key=lambda i: (not i[0].startswith("inconnue"), i[1])):
             self.tree.insert("", "end", iid=key, text="  " + name, image=gui.thumb(path, (30, 30)),
@@ -2387,7 +2483,8 @@ class Gui:
                 folder = os.path.join(STATS_DIR, "illisibles")
                 os.makedirs(folder, exist_ok=True)
                 try:
-                    ms.save_image(os.path.join(folder, "%s_%d.png" % (stamp, i + 1)), item["number"])
+                    ms.save_image(os.path.join(folder, "%s_%d_%s.png" % (stamp, i + 1, safe_name(item["name"] or ""))),
+                                  item["number"])
                 except (OSError, ValueError):
                     pass
         if uncalibrated and not self.uncalibrated_warned:

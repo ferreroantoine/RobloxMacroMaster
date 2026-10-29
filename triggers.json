@@ -1,7 +1,7 @@
 [
  {
   "name": "retry",
-  "image": "images\\capture_20261023_093329.png",
+  "image": "images\\capture_20261029_212754.png",
   "macro": "",
   "scenario": "heal and retry",
   "click": false,
@@ -11,21 +11,21 @@
  },
  {
   "name": "farm",
-  "image": "images\\capture_20261023_093632.png",
+  "image": "images\\Screenshot 2026-10-29 212837.png",
   "macro": "farm",
   "scenario": "",
   "click": false,
-  "threshold": 0.95,
+  "threshold": 0.88,
   "cooldown": 0.1,
   "enabled": true
  },
  {
   "name": "skip-after",
-  "image": "images\\capture_20261023_094549.png",
+  "image": "images\\Screenshot 2026-10-29 213015.png",
   "macro": "",
   "scenario": "",
   "click": true,
-  "threshold": 0.98,
+  "threshold": 0.88,
   "cooldown": 0.1,
   "enabled": true
  },

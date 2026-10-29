@@ -155,7 +155,7 @@
   "steps": [
    {
     "type": "click",
-    "image": "images\\capture_20261026_162750.png",
+    "image": "images\\capture_20261029_213131.png",
     "threshold": 0.96,
     "timeout": 0.5,
     "button": "left",
@@ -167,7 +167,7 @@
    },
    {
     "type": "click",
-    "image": "images\\capture_20261027_195122.png",
+    "image": "images\\capture_20261029_213149.png",
     "threshold": 0.85,
     "timeout": 1.0,
     "button": "left",
@@ -179,7 +179,7 @@
    },
    {
     "type": "click",
-    "image": "images\\capture_20261027_194914.png",
+    "image": "images\\capture_20261029_213228.png",
     "threshold": 0.85,
     "timeout": 1.0,
     "button": "left",
@@ -191,7 +191,7 @@
    },
    {
     "type": "click",
-    "image": "images\\capture_20261027_195327.png",
+    "image": "images\\capture_20261029_213206.png",
     "threshold": 0.85,
     "timeout": 10.0,
     "button": "left",
@@ -203,7 +203,7 @@
    },
    {
     "type": "wait_gone",
-    "image": "images\\capture_20261027_195538.png",
+    "image": "images\\capture_20261029_213242.png",
     "threshold": 0.85,
     "timeout": 1.0,
     "button": "left",
@@ -227,7 +227,7 @@
    },
    {
     "type": "click",
-    "image": "images\\capture_20261026_163259.png",
+    "image": "images\\capture_20261029_213255.png",
     "threshold": 0.85,
     "timeout": 1.0,
     "button": "left",
@@ -239,7 +239,7 @@
    },
    {
     "type": "click",
-    "image": "images\\capture_20261026_163341.png",
+    "image": "images\\capture_20261029_213315.png",
     "threshold": 0.95,
     "timeout": 2.0,
     "button": "left",

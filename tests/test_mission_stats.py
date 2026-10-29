@@ -197,11 +197,22 @@ class DetectorTest(unittest.TestCase):
         self.assertEqual(len(out), 1)
 
 
-def render(text, scale=0.5):
-    """Texte blanc sur fond noir, 30 px de haut (pour imiter la zone de nombre d'une case)."""
+def render(text, scale=0.5, bg=0):
+    """Texte blanc sur fond uni, 30 px de haut (pour imiter la zone de nombre d'une case)."""
     (w, h), base = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, scale, 1)
-    img = np.zeros((30, w + 8, 3), np.uint8)
+    img = np.full((30, w + 8, 3), bg, np.uint8)
     cv2.putText(img, text, (4, 30 - 8), cv2.FONT_HERSHEY_SIMPLEX, scale, (255, 255, 255), 1, cv2.LINE_8)
+    return img
+
+
+def render_spaced(text, gap):
+    """Chiffres dessines un par un : gap = pixels entre deux chiffres (negatif = ils se chevauchent)."""
+    img = np.zeros((30, 20 * len(text) + 10, 3), np.uint8)
+    x = 4
+    for c in text:
+        (w, h), _ = cv2.getTextSize(c, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+        cv2.putText(img, c, (x, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_8)
+        x += w + gap
     return img
 
 
@@ -254,6 +265,63 @@ class DigitReaderTest(unittest.TestCase):
         r.learn(render("11"), 11)
         r.learn(render("11"), 11)
         self.assertEqual([f for f in os.listdir(self.dir) if f.startswith("1")], ["1.png"])
+
+    def real_zones(self):
+        folder = os.path.join(FIXTURES, "digits")
+        # nom du fichier = valeur affichee ("170795.png", "170795_2.png" pour un 2e exemplaire)
+        return [(int(os.path.splitext(f)[0].split("_")[0]), load_template(os.path.join(folder, f)))
+                for f in sorted(os.listdir(folder))]
+
+    def zone(self, name):
+        return load_template(os.path.join(FIXTURES, "digits", name))
+
+    def test_real_zones_learn_then_read(self):
+        r = DigitReader(self.dir)
+        zones = self.real_zones()
+        for value, zone in zones:
+            r.learn(zone, value)
+        for value, zone in zones:
+            self.assertEqual(r.read(zone), value)
+
+    def test_reads_touching_digits(self):
+        # Comme "166,807" dans le jeu : des chiffres qui se touchent ne font plus une tache par chiffre.
+        r = DigitReader(self.dir)
+        r.learn(render_spaced("1234567890", 3), 1234567890)
+        touching = render_spaced("15,607", -2)  # ecrit comme dans le jeu, avec la virgule
+        self.assertLess(len(r.segment(touching)), 5)
+        self.assertEqual(r.read(touching), 15607)
+
+    def test_learns_touching_digits(self):
+        r = DigitReader(self.dir)
+        r.learn(render_spaced("15,607", -2), 15607)
+        self.assertEqual(r.missing(), list("23489"))
+        r.learn(render_spaced("234,089", 3), 234089)
+        self.assertEqual(r.read(render_spaced("60,756", -2)), 60756)
+
+    def test_never_wrong_with_digits_learned_elsewhere(self):
+        # Chaque zone lue avec des chiffres appris sur les AUTRES valeurs : juste ou illisible, jamais faux.
+        zones = self.real_zones()
+        for value, zone in zones:
+            with tempfile.TemporaryDirectory() as tmp:
+                r = DigitReader(tmp)
+                for v2, z2 in zones:
+                    if v2 != value:
+                        r.learn(z2, v2)
+                self.assertIn(r.read(zone), (value, None), value)
+
+    def test_number_memory(self):
+        # Un nombre valide une fois est reconnu en entier, meme si des chiffres manquent encore.
+        r = DigitReader(self.dir)
+        r.learn(self.zone("170795.png"), 170795)
+        self.assertNotEqual(r.missing(), [])
+        self.assertEqual(r.read(self.zone("170795_2.png")), 170795)
+        self.assertIsNone(r.read(self.zone("166807.png")))
+        self.assertEqual(DigitReader(self.dir).read(self.zone("170795_2.png")), 170795)
+
+    def test_number_memory_does_not_confuse_close_numbers(self):
+        r = DigitReader(self.dir)
+        r.learn(self.zone("193.png"), 193)
+        self.assertIsNone(r.read(self.zone("195.png")))
 
     def test_persisted_between_instances(self):
         self.trained()
@@ -372,8 +440,8 @@ class EndScreenReaderTest(unittest.TestCase):
             layout["slot_w"] = layout["slot_h"] = SLOT
             save_layout(self.stats, layout)
         d = DigitReader(os.path.join(self.stats, "digits"))
-        if digits:
-            d.learn(render("1234567890"), 1234567890)
+        if digits:  # appris sur le meme fond que les cases, comme le calibrage dans le jeu
+            d.learn(render("1234567890", bg=30), 1234567890)
         icons = IconLibrary(os.path.join(self.stats, "icons"), os.path.join(self.stats, "icons.json"))
         return EndScreenReader(self.stats, icons, d)
 
