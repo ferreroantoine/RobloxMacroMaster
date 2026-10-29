@@ -1,0 +1,17 @@
+# Binaires construits (build_exe.bat) : trop gros pour git
+*.exe
+build_exe.zip
+build/
+*.spec
+
+# Python
+__pycache__/
+*.pyc
+
+# Fichiers temporaires / sauvegardes
+*.bak
+*.tmp
+crash.log
+
+# Donnees de session generees par l'app (stats, icones, chiffres appris)
+stats/

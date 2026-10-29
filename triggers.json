@@ -1,0 +1,82 @@
+[
+ {
+  "name": "retry",
+  "image": "images\\capture_20261023_093329.png",
+  "macro": "",
+  "scenario": "heal and retry",
+  "click": false,
+  "threshold": 0.98,
+  "cooldown": 0.1,
+  "enabled": true
+ },
+ {
+  "name": "farm",
+  "image": "images\\capture_20261023_093632.png",
+  "macro": "farm",
+  "scenario": "",
+  "click": false,
+  "threshold": 0.95,
+  "cooldown": 0.1,
+  "enabled": true
+ },
+ {
+  "name": "skip-after",
+  "image": "images\\capture_20261023_094549.png",
+  "macro": "",
+  "scenario": "",
+  "click": true,
+  "threshold": 0.98,
+  "cooldown": 0.1,
+  "enabled": true
+ },
+ {
+  "name": "reconnect",
+  "image": "images\\capture_20261024_090200.png",
+  "macro": "",
+  "scenario": "",
+  "click": true,
+  "threshold": 0.96,
+  "cooldown": 3.0,
+  "enabled": true
+ },
+ {
+  "name": "select player",
+  "image": "images\\capture_20261024_090444.png",
+  "macro": "select player",
+  "scenario": "",
+  "click": false,
+  "threshold": 0.94,
+  "cooldown": 0.5,
+  "enabled": true
+ },
+ {
+  "name": "click play",
+  "image": "images\\capture_20261024_090806.png",
+  "macro": "",
+  "scenario": "",
+  "click": true,
+  "threshold": 0.85,
+  "cooldown": 0.5,
+  "enabled": true
+ },
+ {
+  "name": "lobby click",
+  "image": "images\\capture_20261024_090923.png",
+  "macro": "",
+  "scenario": "",
+  "click": true,
+  "threshold": 0.98,
+  "cooldown": 0.5,
+  "enabled": true
+ },
+ {
+  "name": "start mission",
+  "image": "images\\capture_20261024_104336.png",
+  "macro": "",
+  "scenario": "start mission",
+  "click": false,
+  "threshold": 0.85,
+  "cooldown": 0.1,
+  "enabled": true
+ }
+]

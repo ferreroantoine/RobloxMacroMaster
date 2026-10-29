@@ -1,0 +1,254 @@
+[
+ {
+  "name": "start mission",
+  "repeat": 1,
+  "steps": [
+   {
+    "type": "click",
+    "image": "images\\capture_20261024_101741.png",
+    "threshold": 0.95,
+    "timeout": 10.0,
+    "button": "left",
+    "macro": "",
+    "seconds": 1.0,
+    "after": 0.5,
+    "on_fail": "stop",
+    "goto": 1
+   },
+   {
+    "type": "click",
+    "image": "images\\capture_20261024_101829.png",
+    "threshold": 0.85,
+    "timeout": 10.0,
+    "button": "left",
+    "macro": "",
+    "seconds": 1.0,
+    "after": 0.5,
+    "on_fail": "stop",
+    "goto": 1
+   },
+   {
+    "type": "click",
+    "image": "images\\capture_20261026_003407.png",
+    "threshold": 0.85,
+    "timeout": 10.0,
+    "button": "left",
+    "macro": "",
+    "seconds": 1.0,
+    "after": 0.5,
+    "on_fail": "stop",
+    "goto": 1
+   },
+   {
+    "type": "click",
+    "image": "images\\capture_20261024_101934.png",
+    "threshold": 0.85,
+    "timeout": 10.0,
+    "button": "left",
+    "macro": "",
+    "seconds": 1.0,
+    "after": 0.5,
+    "on_fail": "stop",
+    "goto": 1
+   },
+   {
+    "type": "click",
+    "image": "images\\capture_20261024_102130.png",
+    "threshold": 0.85,
+    "timeout": 10.0,
+    "button": "left",
+    "macro": "",
+    "seconds": 1.0,
+    "after": 0.5,
+    "on_fail": "next",
+    "goto": 1
+   },
+   {
+    "type": "click",
+    "image": "images\\capture_20261024_102149.png",
+    "threshold": 0.85,
+    "timeout": 10.0,
+    "button": "left",
+    "macro": "",
+    "seconds": 1.0,
+    "after": 0.5,
+    "on_fail": "stop",
+    "goto": 1
+   },
+   {
+    "type": "click",
+    "image": "images\\capture_20261024_102257.png",
+    "threshold": 0.85,
+    "timeout": 10.0,
+    "button": "left",
+    "macro": "",
+    "seconds": 1.0,
+    "after": 0.5,
+    "on_fail": "stop",
+    "goto": 1
+   },
+   {
+    "type": "click",
+    "image": "images\\capture_20261024_102325.png",
+    "threshold": 0.85,
+    "timeout": 10.0,
+    "button": "left",
+    "macro": "",
+    "seconds": 1.0,
+    "after": 0.5,
+    "on_fail": "stop",
+    "goto": 1
+   },
+   {
+    "type": "wait_image",
+    "image": "images\\capture_20261024_105647.png",
+    "threshold": 0.85,
+    "timeout": 10.0,
+    "button": "left",
+    "macro": "",
+    "seconds": 1.0,
+    "after": 0.5,
+    "on_fail": "stop",
+    "goto": 1
+   },
+   {
+    "type": "macro",
+    "image": "",
+    "threshold": 0.85,
+    "timeout": 10.0,
+    "button": "left",
+    "macro": "select modifier",
+    "seconds": 1.0,
+    "after": 0.5,
+    "on_fail": "stop",
+    "goto": 1
+   },
+   {
+    "type": "click",
+    "image": "images\\capture_20261024_104036.png",
+    "threshold": 0.85,
+    "timeout": 10.0,
+    "button": "left",
+    "macro": "",
+    "seconds": 1.0,
+    "after": 0.5,
+    "on_fail": "stop",
+    "goto": 1
+   },
+   {
+    "type": "click",
+    "image": "images\\capture_20261024_110211.png",
+    "threshold": 0.96,
+    "timeout": 10.0,
+    "button": "left",
+    "macro": "",
+    "seconds": 1.0,
+    "after": 0.5,
+    "on_fail": "stop",
+    "goto": 1
+   }
+  ]
+ },
+ {
+  "name": "heal and retry",
+  "repeat": 1,
+  "steps": [
+   {
+    "type": "click",
+    "image": "images\\capture_20261026_162750.png",
+    "threshold": 0.96,
+    "timeout": 0.5,
+    "button": "left",
+    "macro": "",
+    "seconds": 1.0,
+    "after": 0.5,
+    "on_fail": "goto",
+    "goto": 8
+   },
+   {
+    "type": "click",
+    "image": "images\\capture_20261027_195122.png",
+    "threshold": 0.85,
+    "timeout": 1.0,
+    "button": "left",
+    "macro": "",
+    "seconds": 1.0,
+    "after": 0.5,
+    "on_fail": "goto",
+    "goto": 6
+   },
+   {
+    "type": "click",
+    "image": "images\\capture_20261027_194914.png",
+    "threshold": 0.85,
+    "timeout": 1.0,
+    "button": "left",
+    "macro": "",
+    "seconds": 1.0,
+    "after": 0.5,
+    "on_fail": "next",
+    "goto": 1
+   },
+   {
+    "type": "click",
+    "image": "images\\capture_20261027_195327.png",
+    "threshold": 0.85,
+    "timeout": 10.0,
+    "button": "left",
+    "macro": "",
+    "seconds": 1.0,
+    "after": 0.5,
+    "on_fail": "goto",
+    "goto": 6
+   },
+   {
+    "type": "wait_gone",
+    "image": "images\\capture_20261027_195538.png",
+    "threshold": 0.85,
+    "timeout": 1.0,
+    "button": "left",
+    "macro": "",
+    "seconds": 1.0,
+    "after": 0.5,
+    "on_fail": "goto",
+    "goto": 3
+   },
+   {
+    "type": "wait",
+    "image": "",
+    "threshold": 0.85,
+    "timeout": 10.0,
+    "button": "left",
+    "macro": "",
+    "seconds": 1.0,
+    "after": 0.5,
+    "on_fail": "stop",
+    "goto": 1
+   },
+   {
+    "type": "click",
+    "image": "images\\capture_20261026_163259.png",
+    "threshold": 0.85,
+    "timeout": 1.0,
+    "button": "left",
+    "macro": "",
+    "seconds": 1.0,
+    "after": 0.5,
+    "on_fail": "goto",
+    "goto": 1
+   },
+   {
+    "type": "click",
+    "image": "images\\capture_20261026_163341.png",
+    "threshold": 0.95,
+    "timeout": 2.0,
+    "button": "left",
+    "macro": "",
+    "seconds": 1.0,
+    "after": 0.5,
+    "on_fail": "goto",
+    "goto": 3
+   }
+  ]
+ }
+]

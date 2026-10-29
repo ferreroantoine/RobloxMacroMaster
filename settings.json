@@ -1,0 +1,11 @@
+{
+ "speed": 1.0,
+ "sens": 1.0,
+ "loop_delay": 0.0,
+ "countdown": 3.0,
+ "watch_interval": 0.5,
+ "repeat": 1,
+ "restore_pos": true,
+ "debug": false,
+ "topmost": false
+}
